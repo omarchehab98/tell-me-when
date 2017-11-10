@@ -57,3 +57,5 @@ typings/
 # dotenv environment variables file
 .env
 
+# credentials and environment specific variables
+environment.js
