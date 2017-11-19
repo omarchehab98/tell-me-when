@@ -11,4 +11,5 @@ module.exports = {
   tor: {
     controlPassword: '12345678',
   },
+  notify: [ 'bar@example.com' ],
 }

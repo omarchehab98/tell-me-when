@@ -52,20 +52,17 @@ courseIds.forEach(async (courseId, i) => {
         const prettyDate = new Date().toUTCString()
         const message = `[Success] As of ${prettyDate} the course ${courseId} has ${availability} vacancies. Grab it while you can :)`
         console.log(message)
-        await mail.send({
-          from: 'Tell Me When <tellmewhen.notification@gmail.com>',
-          to: 'wga06@mail.aub.edu',
-          subject: `Course ${courseId} has seats!`,
-          text: message,
-          html: `<p>${message}</p>`,
-        })
-        await mail.send({
-          from: 'Tell Me When <tellmewhen.notification@gmail.com>',
-          to: 'omarchehab98@gmail.com',
-          subject: `Course ${courseId} has seats!`,
-          text: message,
-          html: `<p>${message}</p>`,
-        })
+
+        environment.notify.forEach(async (email) => {
+          await mail.send({
+            from: 'Tell Me When <tellmewhen.notification@gmail.com>',
+            to: email,
+            subject: `Course ${courseId} has seats!`,
+            text: message,
+            html: `<p>${message}</p>`,
+          })
+	})
+        
         runner.stop()
       }
     } catch (err) {
