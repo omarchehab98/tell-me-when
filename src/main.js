@@ -1,36 +1,85 @@
 const environment = require('./environment.js')
+const scrapeIt = require('scrape-it')
+const Runner = require('./Runner.js')
+const Mail = require('./Mail.js')
+const TorClient = require('./TorClient.js')
 
-function createRunner(task, interval) {
-  const Runner = require('./Runner.js')
-  return new Runner(task, interval)
-}
+const torClient = new TorClient(environment.tor)
+const mail = new Mail(environment.nodemailer)
 
-function createMail(credentials) {
-  const Mail = require('./Mail.js')
-  return new Mail(credentials)
-}
+const courseIds = [
+  21967,
+  21971,
+  21976,
+  21985,
+  20814,
+  22057,
+]
 
-const runner = createRunner(async function (counter) {
-  await sleep(250)
-  console.log(counter)
-  return counter + 1
-}, 500)
+const pollFrequency = 60 * 1000
+const runnerOffset = pollFrequency / courseIds.length
 
-runner.start()
+courseIds.forEach(async (courseId, i) => {
+  const runner = new Runner(scrapeTask, pollFrequency)
 
-function sleep(timeout) {
-  return new Promise((resolve, reject) => {
-    setTimeout(resolve, timeout)
+  await sleep(i * runnerOffset)
+
+  runner.start()
+
+  async function scrapeTask() {
+    try {
+      const response = await torClient.request(
+        `https://www-banner.aub.edu.lb/pls/weba/bwckschd.p_disp_detail_sched?term_in=201820&crn_in=${courseId}`
+      )
+
+      if (response.statusCode !== 200) {
+        console.error('[Error] HTTP Server returned `statusCode`.', response.statusCode)
+        return
+      }
+
+      const page = await scrapeIt.scrapeHTML(response.body, {
+        availability: 'table table tr:nth-child(3) td:last-child'
+      })
+      
+      const availability = parseInt(page.availability, 10)
+
+      if (isNaN(availability)) {
+        console.error('[Error] Webpage has changed, could not scrape `availability`.')
+        return
+      }
+      
+      if (availability > 0) {
+        const prettyDate = new Date().toUTCString()
+        const message = `[Success] As of ${prettyDate} the course ${courseId} has ${availability} vacancies. Grab it while you can :)`
+        console.log(message)
+        await mail.send({
+          from: 'Tell Me When <tellmewhen.notification@gmail.com>',
+          to: 'wga06@mail.aub.edu',
+          subject: `Course ${courseId} has seats!`,
+          text: message,
+          html: `<p>${message}</p>`,
+        })
+        await mail.send({
+          from: 'Tell Me When <tellmewhen.notification@gmail.com>',
+          to: 'omarchehab98@gmail.com',
+          subject: `Course ${courseId} has seats!`,
+          text: message,
+          html: `<p>${message}</p>`,
+        })
+        runner.stop()
+      }
+    } catch (err) {
+      if (err.message === 'Connection Timed Out') {
+        torClient.newSession()
+      } else {
+        console.error('[Error]', err)
+      }
+    }
+  }
+})
+
+function sleep(wait) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, wait)
   })
 }
-
-// const mail = createMail(environment.nodemailer)
-// mail.send({
-//   from: 'Tell Me When <tellmewhen.notification@gmail.com>',
-//   to: '2k435jsdahn6jkh@mailinator.com',
-//   subject: 'Hello World',
-//   text: 'Hello world!',
-//   html: '<p>Hello world</p>'
-// })
-//   .then(console.log)
-//   .catch(console.error)

@@ -23,6 +23,7 @@ Runner.prototype.start = function start() {
  * Runs the task with the last task's result as the parameter.
  * 
  * If the previous task is not finished, then the task is not run.
+ * @returns {Promise}
  */
 Runner.prototype.runTask = function runTask() {
   if (!this.taskIsFinished) {

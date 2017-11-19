@@ -8,6 +8,7 @@ function Mail(credentials) {
 
 /**
  * @param {object} options see nodemailer #sendMail
+ * @returns {Promise}
  */
 Mail.prototype.send = function send(options) {
   return new Promise((resolve, reject) => {

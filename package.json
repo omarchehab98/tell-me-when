@@ -18,6 +18,7 @@
   "homepage": "https://github.com/omarchehab98/tell-me-when#readme",
   "dependencies": {
     "nodemailer": "^4.3.1",
-    "scrape-it": "^4.0.0"
+    "scrape-it": "^4.0.0",
+    "tor-request": "^1.0.6"
   }
 }
