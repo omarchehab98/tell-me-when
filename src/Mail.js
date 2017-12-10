@@ -4,6 +4,7 @@
 function Mail(credentials) {
   const nodemailer = require('nodemailer')
   this.transporter = nodemailer.createTransport(credentials)
+  this.defaultOptions = credentials.defaultOptions
 }
 
 /**
@@ -12,7 +13,10 @@ function Mail(credentials) {
  */
 Mail.prototype.send = function send(options) {
   return new Promise((resolve, reject) => {
-    this.transporter.sendMail(options, (error, info) => {
+    this.transporter.sendMail({
+      ...this.defaultOptions,
+      ...options,
+    }, (error, info) => {
       if (error) {
         reject(error)
         return

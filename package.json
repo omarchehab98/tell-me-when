@@ -2,10 +2,6 @@
   "name": "tell-me-when",
   "version": "1.0.0",
   "description": "",
-  "main": "src/main.js",
-  "scripts": {
-    "start": "node src/main.js"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/omarchehab98/tell-me-when.git"

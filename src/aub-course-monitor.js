@@ -7,33 +7,77 @@ const TorClient = require('./TorClient.js')
 const torClient = new TorClient(environment.tor)
 const mail = new Mail(environment.nodemailer)
 
-const courseIds = [
-  21967,
-  21971,
-  21976,
-  21985,
-  20814,
-  22057,
-]
+const heartbeatDataDefault = () => ({
+  start: Date.now(),
+  notOkStatusCount: 0,
+  notOkStatusMap: {},
+  webpageChangedCount: 0,
+  failedScrapeCount: 0,
+  successCourses: [],
+  unhandledErrors: [],
+})
+const heartbeatDataProccessed = (heartbeatData) => ({
+  lastHeartbeat: new Date(heartbeatData.start).toUTCString(),
+  elapsedSinceLastHeartbeat: (Date.now() - heartbeatData.start) + 'ms',
+  ...heartbeatData,
+})
+let heartbeatData = heartbeatDataDefault()
 
-const pollFrequency = 60 * 1000
-const runnerOffset = pollFrequency / courseIds.length
+async function heartbeat() {
+  const heartbeatDataString = JSON.stringify(
+    heartbeatDataProccessed(heartbeatData),
+    null,
+    2
+  )
+  heartbeatData = heartbeatDataDefault()
+  
+  console.log('[Debug] Heartbeat', heartbeatDataString)
 
-courseIds.forEach(async (courseId, i) => {
-  const runner = new Runner(scrapeTask, pollFrequency)
+  const text = heartbeatDataString
+  const html = '<code>'
+    + heartbeatDataString
+      .replace(/\n/g, '<br>')
+      .replace(/\s/g, '&nbsp;')
+    + '</code>'
+
+  await Promise.all(
+    environment.heartbeatEmails.map((to) => mail.send({
+      to,
+      subject: `Tell Me When Heartbeat`,
+      text,
+      html,
+    }))
+  )
+}
+heartbeat()
+setInterval(heartbeat, environment.heartbeatFrequency)
+
+const runnerOffset = environment.pollFrequency / environment.watchCourses.length
+
+environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
+  const runner = new Runner(timedScrapeTask, environment.pollFrequency)
 
   await sleep(i * runnerOffset)
 
   runner.start()
 
+  async function timedScrapeTask(...args) {
+    const start = Date.now()
+    await scrapeTask(...args)
+    const end = Date.now()
+    const ms = end - start
+  }
+
   async function scrapeTask() {
     try {
       const response = await torClient.request(
-        `https://www-banner.aub.edu.lb/pls/weba/bwckschd.p_disp_detail_sched?term_in=201820&crn_in=${courseId}`
+        `https://www-banner.aub.edu.lb/pls/weba/bwckschd.p_disp_detail_sched?term_in=${termId}&crn_in=${courseId}`
       )
 
       if (response.statusCode !== 200) {
-        console.error('[Error] HTTP Server returned `statusCode`.', response.statusCode)
+        console.error('[Exception] HTTP Server returned `statusCode`.', response.statusCode)
+        heartbeatData.notOkStatusCount += 1
+        heartbeatData.notOkStatusMap[response.statusCode] += 1
         return
       }
 
@@ -44,32 +88,41 @@ courseIds.forEach(async (courseId, i) => {
       const availability = parseInt(page.availability, 10)
 
       if (isNaN(availability)) {
-        console.error('[Error] Webpage has changed, could not scrape `availability`.')
+        console.error('[Exception] Webpage has changed, could not scrape `availability`.')
+        heartbeatData.webpageChangedCount += 1
         return
       }
       
       if (availability > 0) {
         const prettyDate = new Date().toUTCString()
-        const message = `[Success] As of ${prettyDate} the course ${courseId} has ${availability} vacancies. Grab it while you can :)`
-        console.log(message)
+        const text = `[Success] As of ${prettyDate} the course ${courseId} running during the term ${termId} has ${availability} vacancies. Grab it while you can :)`
+        console.log(text)
 
-        environment.notify.forEach(async (email) => {
-          await mail.send({
-            from: 'Tell Me When <tellmewhen.notification@gmail.com>',
-            to: email,
-            subject: `Course ${courseId} has seats!`,
-            text: message,
-            html: `<p>${message}</p>`,
-          })
-	})
+        await Promise.all([
+          environment.notifyEmails.map((to) => mail.send({
+            to,
+            subject: `Course ${courseId} Term ${termId} has seats!`,
+            text,
+            html: `<p>${text}</p>`,
+          }))
+        ])
+
+        heartbeatData.successCourses.push(courseId)
         
         runner.stop()
       }
     } catch (err) {
-      if (err.message === 'Connection Timed Out') {
-        torClient.newSession()
-      } else {
-        console.error('[Error]', err)
+      switch (err.code || err.message) {
+        case 'ETIMEDOUT':
+        case 'ECONNRESET':
+        case 'Connection Timed Out':
+          torClient.newSession()
+          heartbeatData.failedScrapeCount += 1
+          break;
+        
+        default:
+          console.error('[Unhandled Error]', err)
+          heartbeatData.unhandledErrors.push(err)
       }
     }
   }
