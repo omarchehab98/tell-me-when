@@ -1,0 +1,20 @@
+{
+  "name": "tell-me-when",
+  "version": "1.0.0",
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omarchehab98/tell-me-when.git"
+  },
+  "author": "Omar Chehab",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/omarchehab98/tell-me-when/issues"
+  },
+  "homepage": "https://github.com/omarchehab98/tell-me-when#readme",
+  "dependencies": {
+    "nodemailer": "^4.3.1",
+    "scrape-it": "^4.0.0",
+    "tor-request": "^1.0.6"
+  }
+}
