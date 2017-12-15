@@ -1,3 +1,5 @@
+const fs = require('fs')
+const path = require('path')
 const environment = require('./environment.js')
 const scrapeIt = require('scrape-it')
 const Runner = require('./Runner.js')
@@ -13,7 +15,8 @@ const heartbeatDataDefault = () => ({
   notOkStatusMap: {},
   webpageChangedCount: 0,
   failedScrapeCount: 0,
-  successCourses: [],
+  successfulScrapeCount: 0,
+  notifiedCourses: [],
   unhandledErrors: [],
 })
 const heartbeatDataProccessed = (heartbeatData) => ({
@@ -21,7 +24,17 @@ const heartbeatDataProccessed = (heartbeatData) => ({
   elapsedSinceLastHeartbeat: (Date.now() - heartbeatData.start) + 'ms',
   ...heartbeatData,
 })
-let heartbeatData = heartbeatDataDefault()
+
+let previousHeartbeat
+try {
+  previousHeartbeat = require('./heartbeat.json')
+} catch (e) {
+  previousHeartbeat = null
+}
+let heartbeatData = {
+  ...heartbeatDataDefault(),
+  ...previousHeartbeat,
+}
 
 async function heartbeat() {
   const heartbeatDataString = JSON.stringify(
@@ -48,7 +61,19 @@ async function heartbeat() {
       html,
     }))
   )
+
+  await saveHeartbeatToFile()
 }
+
+function saveHeartbeatToFile() {
+  const heartbeatDataString = JSON.stringify(
+    heartbeatDataProccessed(heartbeatData),
+    null,
+    2
+  )
+  fs.writeFileSync(path.join(__dirname, './heartbeat.json'), heartbeatDataString, 'utf8')
+}
+
 heartbeat()
 setInterval(heartbeat, environment.heartbeatFrequency)
 
@@ -78,6 +103,7 @@ environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
         console.error('[Exception] HTTP Server returned `statusCode`.', response.statusCode)
         heartbeatData.notOkStatusCount += 1
         heartbeatData.notOkStatusMap[response.statusCode] += 1
+        await saveHeartbeatToFile()
         return
       }
 
@@ -90,6 +116,7 @@ environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
       if (isNaN(availability)) {
         console.error('[Exception] Webpage has changed, could not scrape `availability`.')
         heartbeatData.webpageChangedCount += 1
+        await saveHeartbeatToFile()
         return
       }
       
@@ -107,10 +134,15 @@ environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
           }))
         ])
 
-        heartbeatData.successCourses.push(courseId)
+        heartbeatData.notifiedCourses.push(courseId)
         
         runner.stop()
+        await saveHeartbeatToFile()
+        return
       }
+
+      heartbeatData.successfulScrapeCount += 1
+      await saveHeartbeatToFile()
     } catch (err) {
       switch (err.code || err.message) {
         case 'ETIMEDOUT':
@@ -118,11 +150,14 @@ environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
         case 'Connection Timed Out':
           torClient.newSession()
           heartbeatData.failedScrapeCount += 1
-          break;
+          await saveHeartbeatToFile()
+          return;
         
         default:
           console.error('[Unhandled Error]', err)
           heartbeatData.unhandledErrors.push(err)
+          await saveHeartbeatToFile()
+          return;
       }
     }
   }

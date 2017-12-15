@@ -59,3 +59,5 @@ typings/
 
 # credentials and environment specific variables
 environment.js
+
+heartbeat.json
