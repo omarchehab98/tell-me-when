@@ -1,8 +1,9 @@
+const nodemailer = require('nodemailer')
+
 /**
  * @param {object} credentials see nodemailer #createTransport
  */
 function Mail(credentials) {
-  const nodemailer = require('nodemailer')
   this.transporter = nodemailer.createTransport(credentials)
   this.defaultOptions = credentials.defaultOptions
 }

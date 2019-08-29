@@ -4,9 +4,11 @@ const environment = require('./environment.js')
 const scrapeIt = require('scrape-it')
 const Runner = require('./Runner.js')
 const Mail = require('./Mail.js')
-const TorClient = require('./TorClient.js')
+// const TorClient = require('./TorClient.js')
+const LocalClient = require('./LocalClient.js')
 
-const torClient = new TorClient(environment.tor)
+// const client = new TorClient(environment.tor)
+const client = new LocalClient()
 const mail = new Mail(environment.nodemailer)
 
 const heartbeatDataDefault = () => ({
@@ -95,7 +97,7 @@ environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
 
   async function scrapeTask() {
     try {
-      const response = await torClient.request(
+      const response = await client.request(
         `https://www-banner.aub.edu.lb/pls/weba/bwckschd.p_disp_detail_sched?term_in=${termId}&crn_in=${courseId}`
       )
 
@@ -122,7 +124,7 @@ environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
       
       if (availability > 0) {
         const prettyDate = new Date().toUTCString()
-        const text = `[Success] As of ${prettyDate} the course ${courseId} running during the term ${termId} has ${availability} vacancies. Grab it while you can :)`
+        const text = `[Success] As of ${prettyDate} the section ${courseId} running during the term ${termId} has ${availability} vacancies. Grab it while you can :)`
         console.log(text)
 
         await Promise.all([
@@ -148,7 +150,7 @@ environment.watchCourses.forEach(async ({ termId, courseId }, i) => {
         case 'ETIMEDOUT':
         case 'ECONNRESET':
         case 'Connection Timed Out':
-          torClient.newSession()
+          client.newSession()
           heartbeatData.failedScrapeCount += 1
           await saveHeartbeatToFile()
           return;
